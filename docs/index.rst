@@ -1,7 +1,7 @@
 My Project Documentation
 ========================
 
-Welcome to the documentation for **My Project**!
+Welcome to the documentation for Ariel History Project!
 
 .. toctree::
    :maxdepth: 2
