@@ -8,5 +8,3 @@ Welcome to the documentation for Ariel History Project!
    :caption: Contents:
 
    installation
-   usage
-   api
