@@ -1,162 +1,115 @@
-Deep‑Dive: Pipeline Stages
-==========================
+Stage-by-Stage Reference
+========================
 
-This chapter is the **encyclopaedia** version: exhaustive descriptions,
-internal data schemas, algorithmic references, and parameter sensitivity
-analyses for every stage.  Skim during debug sessions; print sections when
-on‑boarding new lab members.
-
-Legend
-------
-* **img_df** – GeoPandas dataframe keyed by *(idx0, idx1)* (film, frame).
-* **links_df** – Pandas dataframe keyed by *(idx0_a, idx1_a, idx0_b, idx1_b)*.
-* **cluster_id** semantics:
-
-  * −2 – images placed via prior (sortie plot or GCP)
-  * −1 – uninitialised
-  * ≥0 – numbered clusters
+Notation
+--------
+`$CFG` = path to your YAML configuration  
+`<ids>` = cluster ids, or `topN` where **N** is a number
 
 Initialize
 ----------
-**I/O.**  Scans directory tree, infers film & frame from filename regex
-`r"NCAP_(?P<film>\d+)_(?P<frame>\d+)"`.  Adds columns:
+.. code-block:: bash
 
-====================  =================================================
-Column                Meaning
-====================  =================================================
-`film`                Original film roll id
-`frame`               Sequential id inside roll
-`image_path`          Absolute path on OAK
-`width`,`height`      Raw scanner resolution
-`geometry`            *None* (filled later)
-`cluster_id`          −1
-====================  =================================================
+   python main.py --config $CFG --stage initialize
 
-Failure modes
-~~~~~~~~~~~~~
-* **Missing frame numbers** – some contracts use alphabetic suffixes (e.g. 10A).
-  Provide `filename_regex` in YAML to override.
-* **Duplicate (film,frame)** – cleaned by keeping the newest modified‑time.
+Creates `img_df.geojson` :contentReference[oaicite:6]{index=6}:contentReference[oaicite:7]{index=7}.
 
-Crop
-----
-Two‑tier mask:
+Crop  / inspect-cropping
+-----------------------
+.. code-block:: bash
 
-1. **Adaptive background** – flood‑fill the smooth region outside photo.
-2. **Contract‑specific frame** – rectangle or rounded corners trimmed by
-   `margin_*`.
+   python main.py --config $CFG --stage crop
+   python main.py --config $CFG --stage inspect-cropping  # visual QC
 
-Mathematical formulation
-~~~~~~~~~~~~~~~~~~~~~~~~
-Adaptive mask uses variance of Gaussian‑blurred greyscale:
-
-.. math::
-   M(i,j) = \begin{cases}
-              1 & \text{if } \sigma_{\text{local}}(i,j) > T_\text{std}
-              0 & \text{otherwise}
-            \end{cases}
-
-Bounding rectangle extracted by argmin/argmax; stored in `img_df` so later
-stages can crop *on‑the‑fly* without rewriting millions of JPEGs.
-
-Inspect‑cropping prints an HTML gallery (Jinja template in `src/vis/`).
+Use `--test-crop` for a quick sample run :contentReference[oaicite:8]{index=8}:contentReference[oaicite:9]{index=9}.
 
 Featurize
 ---------
-**Algorithm.** SURF 128‑D descriptor (we truncate to 64‑D to halve disk and
-speed up FLANN).  Keypoints pruned at two places:
+.. code-block:: bash
 
-* Detector: `hessian_threshold` (SURF paper §4.1).
-* Dataset‑wide max: keep top‑K by response to cap RAM.
+   python main.py --config $CFG --stage featurize
+   python main.py --config $CFG --stage featurize --only-missing
 
-Compressed as blosc‑zstd inside HDF5 → 200 keypoints ≈ 24 kB.
+SURF files go to `img_cache_folder` :contentReference[oaicite:10]{index=10}:contentReference[oaicite:11]{index=11}.
 
-Swath‑breaks
+Swath-breaks
 ------------
-*Candidate links.*  For every `(img_i, img_{i+1})` in folder order:
+.. code-block:: bash
 
-#. Load keypoints & descriptors.
-#. Match via FLANN Index (KD‑tree, 12 trees).
-#. Apply Lowe ratio test (≤ 0.8).
-#. Fit affine with RANSAC (1000 iters, reprojection ≈ 5 px).
-#. Count inliers.
+   python main.py --config $CFG --stage swath-breaks
 
-If `inliers ≥ swath_break_threshold` ⇒ link accepted.
+Tunable: `swath_break_threshold` (min inliers) :contentReference[oaicite:12]{index=12}:contentReference[oaicite:13]{index=13}.
 
-Complexity: **O(N)** links for **N** frames vs **O(N²)** naïve.
-
-Initialize‑graph
-----------------
-Builds clusters as *union‑find* on swath nodes.  Link weight = ∑inliers over
-all image‑pairs between two swaths, pruned by
-`individual_link_threshold` → `cluster_inlier_threshold`.
-
-Graph Rectification (optional)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-Long‑swath drift corrected by linear regression of centroid positions, fixing
-scale and yaw so optimisation starts close to manifold optimum (prevents Ceres
-from falling into local minima).
-
-Opt‑links
----------
-Purpose: keep optimisation tractable by capping degree of each node.
-Selection rules:
-
-* **Within‑swath**: keep strongest `n_within` links from each image.
-* **Across‑swath**: keep strongest `n_across` links.
-* **Swath‑level**: stop once a swath connects to `n_swath_neighbors` others.
-* Absolute inlier floor: `optim_inclusion_threshold`.
-
-Outputs cached to `optim_links_<hash>.p` so repeated runs skip recomputation.
-
-Ceres‑opt & Global‑opt
+Initialize-from-plots
 ---------------------
-Both solve a bundle adjustment problem in SE(2)×ℝ (x, y, θ, s):
+.. code-block:: bash
 
-.. math::
-   \min_{\{T_i\}} \sum_{(i,j)∈E} \| T_j^{-1} T_i − \hat{T}_{ij} \|_Σ²
+   python main.py --config $CFG --stage initialize-from-plots   # dev partition
 
-where `T_i` are optimisable transforms, `\hat{T}` are measured links, and Σ is
-scaled by 1/inliers.
+Requires `digitized_plot:` in YAML :contentReference[oaicite:14]{index=14}:contentReference[oaicite:15]{index=15}.
 
-* **Ceres** uses sparse Levenberg‑Marquardt (CPU, no GPU needed).
-* **Global‑opt** uses PyTorch Adam, optionally GPU.
-
-Create‑raster
+New-neighbors
 -------------
-For each cluster:
+.. code-block:: bash
 
-#. Compute canvas bounds by transforming image footprints.
-#. Allocate mem‑mapped RGB array (huge TIFF manageable via `rasterio.Env(GTiff)`
-   blocksize).
-#. For overlay mode draw images in arbitrary order; for blend mode accumulate
-   alpha‑weighted arrays then divide.
-#. Save GeoTIFF with proper GeoTransform.
+   python main.py --config $CFG --stage new-neighbors --ids -2   # after plots
+   python main.py --config $CFG --stage new-neighbors --ids top10
 
-Tip: use `estimate-gsd` beforehand to cap file size; 1 m/px is usually enough
-for 1940s aerial film.
+Finds cross-swath links inside each cluster :contentReference[oaicite:16]{index=16}:contentReference[oaicite:17]{index=17}.
 
-Advanced stages
----------------
-* **manual-stitch** – brute‑force all pairs across two swaths; use when flight
-  log is unreliable.
-* **stitch-across / refine-links** – sub‑sampled keypoint search; days on large
-  contracts, but finds the last 1% of links.
-* **initialize-from-gcps / constrained-opt** – integrate ground control points
-  for absolute georeference; requires `gcps.csv` with WGS84 coordinates.
-
-Data lineage map
+Initialize-graph
 ----------------
-.. mermaid::
+.. code-block:: bash
 
-   graph TD
-     A(raw images) -->|initialize| B(img_df)
-     B -->|crop| C{img_df+bounds}
-     C -->|featurize| D(SURF cache)
-     C -->|swath-breaks| E(links_df 1)
-     D --> E
-     E -->|initialize-graph| F(graph)
-     F -->|new-neighbors| G(links_df 2)
-     G -->|opt-links| H(curated links)
-     H -->|ceres-opt| I(optim img_df)
-     I -->|create-raster| J(GeoTIFF/COG)
+   python main.py --config $CFG --stage initialize-graph
+
+Prints cluster sizes; runs fine on **dev** :contentReference[oaicite:18]{index=18}:contentReference[oaicite:19]{index=19}.
+
+Opt-links
+---------
+.. code-block:: bash
+
+   python main.py --config $CFG --stage opt-links --ids top10
+   # add --all-links to include every link above the threshold
+
+Caches selection to `optim_links.p` :contentReference[oaicite:20]{index=20}:contentReference[oaicite:21]{index=21}.
+
+Ceres-opt / Constrained-opt
+---------------------------
+.. code-block:: bash
+
+   python main.py --config $CFG --stage ceres-opt       --ids top10
+   python main.py --config $CFG --stage constrained-opt --ids top10
+
+The constrained version needs `gcp_file:` in YAML :contentReference[oaicite:22]{index=22}:contentReference[oaicite:23]{index=23}.
+
+Create-raster
+-------------
+.. code-block:: bash
+
+   python main.py --config $CFG --stage create-raster \
+                  --raster-type clusters --ids top10 \
+                  --alpha-mode overlay --annotate graph
+
+Generate-geotiffs / Rio merge / COG
+-----------------------------------
+.. code-block:: bash
+
+   python main.py --config $CFG --stage generate-geotiffs --ids top10 --output-gsd 1
+   rio merge ...                      # see PDF for loop :contentReference[oaicite:24]{index=24}:contentReference[oaicite:25]{index=25}
+   rio cogeo create ...               # produce *_cog.tif :contentReference[oaicite:26]{index=26}:contentReference[oaicite:27]{index=27}
+
+Upload & Earth Engine asset
+---------------------------
+.. code-block:: bash
+
+   gcloud storage cp *.tif gs://gee_assets/mosaics/<country>/<asset_name>
+   # then run notebooks/create_cog_backed_assets.ipynb  :contentReference[oaicite:28]{index=28}:contentReference[oaicite:29]{index=29}
+
+Advanced / optional stages
+--------------------------
+* `stitch-across`, `refine-links` – exhaustive cross-swath search
+* `estimate-gsd` – prints suggested raster resolution :contentReference[oaicite:30]{index=30}:contentReference[oaicite:31]{index=31}
+* GCP collection workflow – see PDF, pages “Case 1 / Case 2” :contentReference[oaicite:32]{index=32}:contentReference[oaicite:33]{index=33}.
+
+For full parameter docs open `config/template.yml`; every field is commented.
