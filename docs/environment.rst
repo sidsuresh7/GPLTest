@@ -1,45 +1,58 @@
 Execution Environment
 =====================
 
-Container
----------
-The entire tool-chain is bundled in
+Choose your runtime
+-------------------
+You have two equivalent ways to satisfy SURF **and** keep the rest of the
+dependencies stable:
 
-.. code-block:: bash
+#. **Python venv with legacy libraries**  
+   *SURF is patented and no longer ships with wheel-based OpenCV.*  
+   Create an isolated environment so its old-style packages don’t clash with
+   modern ones:
 
-   /oak/stanford/groups/smhsiang/aerialhist/stitching/containers/surf_ceres.sif
+   .. code-block:: bash
 
-Run any stage through **Singularity** to guarantee consistent libraries.
+      python -m venv .venv && source .venv/bin/activate
+      # install *exact* versions listed by the pipeline maintainers
+      pip install -r requirements.txt
 
-Local dev
----------
-*Install once* (VS Code integrated terminal):
+   The requirements pin `opencv-contrib-python==4.5.5.64`, which still
+   contains SURF.
 
-.. code-block:: bash
+#. **Docker / Singularity container**  
+   A ready-made image has OpenCV rebuilt from source with SURF enabled and
+   all other libs up-to-date.  
+   *If you work on Sherlock use Singularity; locally you can run the same
+   image with Docker.*
 
-   git clone https://github.com/<org>/aerial-history-stitching.git
-   cd aerial-history-stitching
-   python -m venv .venv && source .venv/bin/activate
-   pip install -r requirements.txt
+   .. code-block:: bash
+
+      singularity pull surf_ceres.sif docker://ghcr.io/<org>/surf_ceres:latest
+      # example shell inside the container
+      singularity exec --cleanenv surf_ceres.sif bash
+
+   *(TO DO: when the Dockerfile is published, drop it in `docs/environment/`
+   and reference it here.)*
 
 Sherlock modules
 ----------------
-When you need non-Python utilities:
+When you need extra command-line tools (e.g. `gcloud`, `rio`):
 
 .. code-block:: bash
 
-   ml avail                 # see everything
-   ml python/3.9 rasterio   # load modules ad-hoc
+   ml avail                         # discover modules
+   ml python/3.9 rasterio           # load just-in-time
 
 Queues & resources
 ------------------
-Submit heavy jobs through **Slurm**.  Typical header:
+Typical Slurm header for compute-heavy stages:
 
 .. code-block:: bash
 
    #!/usr/bin/env bash
-   #SBATCH -p serc,normal   # or dev for quick tests (1 CPU / ≤1 h)
-   #SBATCH -c 30            # 30 CPUs match --surf_workers 6
-   #SBATCH -t 24:00:00      # wall-time safety buffer
+   #SBATCH -p serc,normal        # or dev for quick, small jobs
+   #SBATCH -c 30                 # CPUs = surf_workers * 5 is a good rule
+   #SBATCH -t 24:00:00           # generous wall-time buffer
 
-   
+
