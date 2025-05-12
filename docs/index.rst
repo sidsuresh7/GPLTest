@@ -1,4 +1,4 @@
-My Project Documentation
+Ariel History Project Documentation
 ========================
 
 Welcome to the documentation for **Ariel History Project**!
@@ -11,3 +11,7 @@ Contents
    :caption: Sections:
 
    installation
+   environment
+   configuration files
+   workflow
+   stages 
