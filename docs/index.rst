@@ -1,13 +1,11 @@
-My Project Documentation
-========================
-
-Welcome to the documentation for **Ariel History Project**!
-
-Contents
---------
+Stitching Pipeline Documentation
+================================
 
 .. toctree::
+   :caption: Contents:
    :maxdepth: 2
-   :caption: Sections:
 
-   installation
+   configuration_files
+   environment
+   workflow
+   stages
