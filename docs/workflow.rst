@@ -1,170 +1,201 @@
-Stitching Pipeline Procedure and Workflow
-============================
+.. contents::
+   :local:
+   :depth: 2
 
-DataSet Spreadsheet
--------------------
-Row: survey that the British government decided they want to take over a piece of land  
-Sorted Plots – maps that have the trajectory of the plane on the maps  
+=============================
+Aerial-Image Stitching Guide
+=============================
 
-1. Create and Configure Your `.yml` File
-----------------------------------------
-- **What stays constant** (don’t touch):  
-  the structure and keys in `gambia_124.yml` (or any existing config).
-- **What you need to edit** (values you must change):
-  
-  1. Copy it to a new file for your survey:
-  
-     .. code-block:: bash
+This step-by-step walkthrough uses **colorful admonitions** to distinguish constant values, editable fields, and important notes. Simply copy-and-paste into your Sphinx/ReadTheDocs project.
 
-        cp gambia_124.yml gambia_53.yml
+.. raw:: html
 
-  2. Update all folder paths under these keys:
+   <style>
+     /* Customize admonition headers */
+     .admonition.note .admonition-title { background-color: #4A90E2; color: white; }
+     .admonition.tip .admonition-title  { background-color: #7ED321; color: white; }
+     .admonition.important .admonition-title { background-color: #F5A623; color: white; }
+     .admonition.warning .admonition-title { background-color: #D0021B; color: white; }
+   </style>
 
-     .. code-block:: yaml
+1. Create & Configure Your `.yml` File
+=======================================
 
-        img_cache_folder:        /scratch/groups/smhsiang/ahp/stitching/cache/Gambia/gambia_53/SURF
-        checkpoint_cache_folder: /oak/stanford/groups/smhsiang/aerialhist/stitching/results/Gambia/gambia_53
-        raster_output_folder:    /oak/stanford/groups/smhsiang/aerialhist/stitching/results/Gambia/gambia_53
+.. admonition:: What stays constant
+   :class: note
 
-  3. *(Optional)* Add digitized-plot data:
+   - The **structure** and **key names** in any `*.yml` config (e.g. `gambia_124.yml`).
 
-     .. code-block:: yaml
+.. admonition:: What to edit
+   :class: tip
 
-        digitized_plot: /oak/stanford/groups/smhsiang/aerialhist/datasets/scan_lines/Gambia/Gambia_scan_lines.csv
+   1. **Copy template**  
+      .. code-block:: bash
+
+         cp gambia_124.yml gambia_53.yml
+
+   2. **Update folder paths** under these keys:
+
+      .. code-block:: yaml
+
+         img_cache_folder:        /scratch/.../cache/Gambia/gambia_53/SURF
+         checkpoint_cache_folder: /oak/.../results/Gambia/gambia_53
+         raster_output_folder:    /oak/.../results/Gambia/gambia_53
+
+   3. **Add digitized-plot** (required for sortie plots):
+
+      .. code-block:: yaml
+
+         digitized_plot: /oak/.../datasets/scan_lines/Gambia/Gambia_scan_lines.csv
 
 
 2. Initialize Stage
--------------------
-- **What stays constant**:
-  - Singularity image:  
-    `/oak/stanford/groups/smhsiang/aerialhist/stitching/containers/surf_ceres.sif`
-  - Python entry-point:  
-    `/home/users/sidsur/aerial-history-stitching/main.py`
+===================
 
-- **What to edit**:
-  - `--config` path: point to your new YAML:
-    
-    .. code-block:: bash
+.. admonition:: What stays constant
+   :class: note
 
-       --config /oak/stanford/groups/smhsiang/aerialhist/stitching/config/Gambia/gambia_53.yml
+   - **Singularity image:**  
+     `/oak/.../containers/surf_ceres.sif`  
+   - **Python entry-point:**  
+     `/home/users/sidsur/aerial-history-stitching/main.py`
 
-  - `--stage` flag:
+.. admonition:: What to edit
+   :class: tip
 
-    .. code-block:: bash
+   - **Config path:**
 
+     .. code-block:: bash
+
+        --config /oak/.../config/Gambia/gambia_53.yml
+
+   - **Stage flag:**  
+     ``--stage initialize``
+
+.. code-block:: bash
+
+   singularity run /oak/.../containers/surf_ceres.sif \
+       python3 /home/users/sidsur/aerial-history-stitching/main.py \
+       --config /oak/.../config/Gambia/gambia_53.yml \
        --stage initialize
-
-- **Sample command**:
-
-  .. code-block:: bash
-
-     singularity run /oak/stanford/groups/smhsiang/aerialhist/stitching/containers/surf_ceres.sif \
-         python3 /home/users/sidsur/aerial-history-stitching/main.py \
-         --config /oak/stanford/groups/smhsiang/aerialhist/stitching/config/Gambia/gambia_53.yml \
-         --stage initialize
 
 
 3. Cropping & Inspection
--------------------------
-1. **Edit your `.yml`**  
-   - Constant keys: `margin_bottom`, `margin_left`, `margin_top`, `margin_right`  
-   - Edit values to tweak cropping margins.
+========================
 
-2. **Prepare your SLURM script**  
-   - Constant: Singularity image and Python entry-point (same as Initialize).  
-   - Edit:
-     - `#SBATCH -c 30`  (allocate 30 CPUs)
-     - `--stage crop` → later change to `--stage inspect-crop`
-     - `--config` path (your config file)
+.. admonition:: Config edits
+   :class: tip
 
-3. **Workflow**  
-   - Submit crop job:
+   - **Keys:**  
+     `margin_bottom`, `margin_left`, `margin_top`, `margin_right`  
+   - **Edit:** numeric values to refine the crop mask.
 
-     .. code-block:: bash
+.. admonition:: SLURM script edits
+   :class: warning
 
-        sbatch crop_gambia_53.slurm
+   - **CPUs:** `#SBATCH -c 30`  
+   - **Stage:** change between `--stage crop` and `--stage inspect-crop`  
+   - **Config path:** your new `.yml`
 
-   - In Jupyter, open the “Inspect Crop” notebook in the `raster_output_folder` to view sample masks.  
-   - Adjust margins in `.yml` and rerun with `--stage inspect-crop`.
+**Workflow**:
+
+1. Submit cropping:
+
+   .. code-block:: bash
+
+      sbatch crop_gambia_53.slurm
+
+2. Open the **Inspect Crop** notebook in Jupyter (under `raster_output_folder`) to view masks.  
+3. Tweak margins in your `.yml`, then rerun:
+
+   .. code-block:: bash
+
+      sbatch inspectcrop_gambia_53.slurm
 
 
 4. Featurization
-----------------
-- **Purpose**: detect and describe keypoints using SURF.
-- **What stays constant**:
-  - The SURF algorithm
-  - Outputs `.hdf5` files to `img_cache_folder`
+================
 
-- **What to edit in SLURM**:
-  - `--stage featurize`
-  - `--config` path
-  - CPU count (`#SBATCH -c 30`)
+.. admonition:: What stays constant
+   :class: note
 
-- **Run**:
+   - SURF algorithm  
+   - Output: `.hdf5` files in `img_cache_folder`
 
-  .. code-block:: bash
+.. admonition:: What to edit
+   :class: tip
 
-     sbatch featurize_gambia_53.slurm
+   - **Stage:** `--stage featurize`  
+   - **Config:** path to your `.yml`  
+   - **CPUs:** `#SBATCH -c 30`
+
+.. code-block:: bash
+
+   sbatch featurize_gambia_53.slurm
 
 
 5. Swath Breaks
----------------
-- **Purpose**: link consecutive images by matching inliers.
-- **Config edits**:
-  - Constant key: `inlier_threshold` (already set)
-  - Edit only to change link strictness.
-- **SLURM changes**:
-  - `--stage swath-break`
-  - `#SBATCH -c 30`
-  - `--config` (unchanged path)
-- **Run**:
+===============
 
-  .. code-block:: bash
+.. admonition:: What stays constant
+   :class: note
 
-     sbatch swathbreak_gambia_53.slurm
+   - Key `inlier_threshold` (already in config)
+
+.. admonition:: What to edit
+   :class: tip
+
+   - **Stage:** `--stage swath-break`  
+   - **CPUs:** `#SBATCH -c 30`
+
+.. code-block:: bash
+
+   sbatch swathbreak_gambia_53.slurm
 
 
-6. Sortie Plots (Optional)
---------------------------
-- **When you have DOS_PLOTS**:
-  1. Edit your `.yml` to add:
+6. Sortie Plots
+===============
 
-     .. code-block:: yaml
+.. admonition:: What stays constant
+   :class: note
 
-        digitized_plot: /oak/stanford/groups/smhsiang/aerialhist/datasets/scan_lines/Gambia/Gambia_scan_lines.csv
+   - You **must** add `digitized_plot:` in your YAML before running.
 
-  2. In SLURM script:
-     - Change `--stage` to `initialize-from-plots`
-     - Switch partition: `#SBATCH -p dev`
-     - Remove CPU line (uses 1 CPU)
+.. admonition:: What to edit
+   :class: tip
 
-  3. **Run**:
+   - **Stage:** `--stage initialize-from-plots`  
+   - **Partition:** `#SBATCH -p dev`  
+   - **Remove** CPU directive (uses 1 CPU)
 
-     .. code-block:: bash
+.. code-block:: bash
 
-        sbatch plots_gambia_53.slurm
+   sbatch plots_gambia_53.slurm
 
 
 7. New Neighbors
-----------------
-- **Purpose**: find links within clusters only.
-- **SLURM edits**:
-  - `--stage new-neighbors`
-  - `--ids -2`
-  - `#SBATCH -p serc,normal`
-  - `#SBATCH -c 30`
-- **Run**:
+================
 
-  .. code-block:: bash
+.. admonition:: What to edit
+   :class: tip
 
-     sbatch newneighbors_gambia_53.slurm
+   - **Stage:** `--stage new-neighbors`  
+   - **IDs:** `--ids -2`  
+   - **Partition:** `#SBATCH -p serc,normal`  
+   - **CPUs:** `#SBATCH -c 30`
+
+.. code-block:: bash
+
+   sbatch newneighbors_gambia_53.slurm
 
 
-Tips for All SLURM Scripts
 --------------------------
-- **Keep constant**: lines loading modules or the Singularity container.  
+**General SLURM Tips**
+--------------------------
+
+- **Keep constant**: module loads, Singularity container commands.  
 - **Always edit**:
   - `--config` path  
   - `--stage` name  
-  - Any stage‑specific flags (e.g. `--ids`)  
-  - CPU or partition directives under `#SBATCH`
+  - Stage-specific flags (e.g. `--ids`)  
+  - `#SBATCH` CPUs or partition  
