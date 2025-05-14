@@ -1,116 +1,170 @@
-Quick-start Workflow
-====================
+Stitching Pipeline Procedure and Workflow
+============================
 
-Step 1  – Create a config
--------------------------
-Copy the template and edit *only* the paths and margins:
+DataSet Spreadsheet
+-------------------
+Row: survey that the British government decided they want to take over a piece of land  
+Sorted Plots – maps that have the trajectory of the plane on the maps  
 
-.. code-block:: bash
+1. Create and Configure Your `.yml` File
+----------------------------------------
+- **What stays constant** (don’t touch):  
+  the structure and keys in `gambia_124.yml` (or any existing config).
+- **What you need to edit** (values you must change):
+  
+  1. Copy it to a new file for your survey:
+  
+     .. code-block:: bash
 
-   cp config/template.yml config/gambia_53.yml
-   # open the new file in VS Code
-   # change:
-   #   raw_images_folder, img_cache_folder,
-   #   raster_output_folder, checkpoint_cache_folder
-   #   margin_* values if the frame is thick or thin
+        cp gambia_124.yml gambia_53.yml
 
-Step 2  – Run **initialize**
-----------------------------
-From the repo root:
+  2. Update all folder paths under these keys:
 
-.. code-block:: bash
+     .. code-block:: yaml
 
-   singularity run containers/surf_ceres.sif \
-       python main.py \
-       --config config/gambia_53.yml \
+        img_cache_folder:        /scratch/groups/smhsiang/ahp/stitching/cache/Gambia/gambia_53/SURF
+        checkpoint_cache_folder: /oak/stanford/groups/smhsiang/aerialhist/stitching/results/Gambia/gambia_53
+        raster_output_folder:    /oak/stanford/groups/smhsiang/aerialhist/stitching/results/Gambia/gambia_53
+
+  3. *(Optional)* Add digitized-plot data:
+
+     .. code-block:: yaml
+
+        digitized_plot: /oak/stanford/groups/smhsiang/aerialhist/datasets/scan_lines/Gambia/Gambia_scan_lines.csv
+
+
+2. Initialize Stage
+-------------------
+- **What stays constant**:
+  - Singularity image:  
+    `/oak/stanford/groups/smhsiang/aerialhist/stitching/containers/surf_ceres.sif`
+  - Python entry-point:  
+    `/home/users/sidsur/aerial-history-stitching/main.py`
+
+- **What to edit**:
+  - `--config` path: point to your new YAML:
+    
+    .. code-block:: bash
+
+       --config /oak/stanford/groups/smhsiang/aerialhist/stitching/config/Gambia/gambia_53.yml
+
+  - `--stage` flag:
+
+    .. code-block:: bash
+
        --stage initialize
 
-✓  Creates `img_df.geojson` (one row per image) :contentReference[oaicite:0]{index=0}:contentReference[oaicite:1]{index=1}.
+- **Sample command**:
 
-Step 3  – Crop & inspect
-------------------------
-1. Submit a Slurm job (heavy parallel IO):
+  .. code-block:: bash
 
-   .. code-block:: bash
+     singularity run /oak/stanford/groups/smhsiang/aerialhist/stitching/containers/surf_ceres.sif \
+         python3 /home/users/sidsur/aerial-history-stitching/main.py \
+         --config /oak/stanford/groups/smhsiang/aerialhist/stitching/config/Gambia/gambia_53.yml \
+         --stage initialize
 
-      # crop.slurm
-      #SBATCH -c 30
-      #SBATCH -p serc,normal
-      singularity exec surf_ceres.sif \
-          python main.py --config $CFG --stage crop
 
-2. Verify interactively:
+3. Cropping & Inspection
+-------------------------
+1. **Edit your `.yml`**  
+   - Constant keys: `margin_bottom`, `margin_left`, `margin_top`, `margin_right`  
+   - Edit values to tweak cropping margins.
 
-   .. code-block:: bash
+2. **Prepare your SLURM script**  
+   - Constant: Singularity image and Python entry-point (same as Initialize).  
+   - Edit:
+     - `#SBATCH -c 30`  (allocate 30 CPUs)
+     - `--stage crop` → later change to `--stage inspect-crop`
+     - `--config` path (your config file)
 
-      python main.py --config $CFG --stage inspect-cropping
-      # opens sample images with the mask overlay :contentReference[oaicite:2]{index=2}:contentReference[oaicite:3]{index=3}
+3. **Workflow**  
+   - Submit crop job:
 
-   *Too tight / too loose?* Adjust `margin_*` in the YAML and re-run **crop**.
+     .. code-block:: bash
 
-Step 4  – Featurize
--------------------
-Compute SURF key-points (cached to disk):
+        sbatch crop_gambia_53.slurm
 
-.. code-block:: bash
+   - In Jupyter, open the “Inspect Crop” notebook in the `raster_output_folder` to view sample masks.  
+   - Adjust margins in `.yml` and rerun with `--stage inspect-crop`.
 
-   sbatch -c 30 featurize.slurm   # same pattern, just change --stage
 
-**Pro-tip**: set `surf_workers = 6` so that `surf_workers*5 ≈ CPUs` :contentReference[oaicite:4]{index=4}:contentReference[oaicite:5]{index=5}.
+4. Featurization
+----------------
+- **Purpose**: detect and describe keypoints using SURF.
+- **What stays constant**:
+  - The SURF algorithm
+  - Outputs `.hdf5` files to `img_cache_folder`
 
-Step 5  – Swath breaks
-----------------------
-Detect “next-frame” links:
+- **What to edit in SLURM**:
+  - `--stage featurize`
+  - `--config` path
+  - CPU count (`#SBATCH -c 30`)
 
-.. code-block:: bash
+- **Run**:
 
-   sbatch -c 30 swath_breaks.slurm   # --stage swath-breaks
+  .. code-block:: bash
 
-Tweak `swath_break_threshold` if you see false links or missed joins.
+     sbatch featurize_gambia_53.slurm
 
-Step 6  – (Optionally) initialize from sortie plots
----------------------------------------------------
-Add one line to the YAML:
 
-.. code-block:: yaml
+5. Swath Breaks
+---------------
+- **Purpose**: link consecutive images by matching inliers.
+- **Config edits**:
+  - Constant key: `inlier_threshold` (already set)
+  - Edit only to change link strictness.
+- **SLURM changes**:
+  - `--stage swath-break`
+  - `#SBATCH -c 30`
+  - `--config` (unchanged path)
+- **Run**:
 
-   digitized_plot: /oak/.../scan_lines/Gambia/Gambia_scan_lines.csv
+  .. code-block:: bash
 
-Then run on the lightweight **dev** partition:
+     sbatch swathbreak_gambia_53.slurm
 
-.. code-block:: bash
 
-   sbatch -p dev init_from_plots.slurm   # --stage initialize-from-plots
-
-Step 7  – Grow the graph & optimise
------------------------------------
-A typical sequence for the biggest 10 clusters:
-
-.. code-block:: bash
-
-   # still on dev; quick operations
-   python main.py --config $CFG --stage initialize-graph
-
-   # back on 30 CPUs
-   python main.py --config $CFG --stage new-neighbors --ids top10
-   python main.py --config $CFG --stage opt-links      --ids top10
-   python main.py --config $CFG --stage ceres-opt      --ids top10
-
-Step 8  – Raster & publish
+6. Sortie Plots (Optional)
 --------------------------
-.. code-block:: bash
+- **When you have DOS_PLOTS**:
+  1. Edit your `.yml` to add:
 
-   python main.py --config $CFG --stage create-raster --raster-type clusters \
-                  --ids top10 --alpha-mode overlay --annotate graph
+     .. code-block:: yaml
 
-   # Inspect, then generate final GeoTIFFs
-   python main.py --config $CFG --stage generate-geotiffs --ids top10
+        digitized_plot: /oak/stanford/groups/smhsiang/aerialhist/datasets/scan_lines/Gambia/Gambia_scan_lines.csv
 
-   # Convert to COG & push to GCP bucket (requires rasterio+gcloud)
-   ml python/3.9 google-cloud-sdk
-   rio cogeo create ...               # see stages page for full loop
-   gcloud storage cp *.tif gs://gee_assets/...
+  2. In SLURM script:
+     - Change `--stage` to `initialize-from-plots`
+     - Switch partition: `#SBATCH -p dev`
+     - Remove CPU line (uses 1 CPU)
 
-That’s it! For anything trickier—manual links, GCP workflows—see
-:doc:`stages`.
+  3. **Run**:
 
+     .. code-block:: bash
+
+        sbatch plots_gambia_53.slurm
+
+
+7. New Neighbors
+----------------
+- **Purpose**: find links within clusters only.
+- **SLURM edits**:
+  - `--stage new-neighbors`
+  - `--ids -2`
+  - `#SBATCH -p serc,normal`
+  - `#SBATCH -c 30`
+- **Run**:
+
+  .. code-block:: bash
+
+     sbatch newneighbors_gambia_53.slurm
+
+
+Tips for All SLURM Scripts
+--------------------------
+- **Keep constant**: lines loading modules or the Singularity container.  
+- **Always edit**:
+  - `--config` path  
+  - `--stage` name  
+  - Any stage‑specific flags (e.g. `--ids`)  
+  - CPU or partition directives under `#SBATCH`
