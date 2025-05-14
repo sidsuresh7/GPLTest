@@ -79,6 +79,10 @@ This step-by-step walkthrough uses **colorful admonitions** to distinguish const
        --config /oak/.../config/Gambia/gambia_53.yml \
        --stage initialize
 
+.. image:: images/initialize.png
+   :alt: Preview of the `img_df` GeoDataFrame after initialization
+   :align: center
+   :width: 80%
 
 3. Cropping & Inspection
 ========================
@@ -198,4 +202,4 @@ This step-by-step walkthrough uses **colorful admonitions** to distinguish const
   - `--config` path  
   - `--stage` name  
   - Stage-specific flags (e.g. `--ids`)  
-  - `#SBATCH` CPUs or partition  
+  - `#SBATCH` CPUs or partition 
