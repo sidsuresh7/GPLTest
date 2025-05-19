@@ -3,7 +3,7 @@
    :depth: 2
 
 =============================
-Aerial-Image Stitching Guide
+User Step By Step Guide
 =============================
 
 This step-by-step walkthrough uses **colorful admonitions** to distinguish constant values, editable fields, and important notes. Simply copy-and-paste into your Sphinx/ReadTheDocs project.
@@ -12,10 +12,10 @@ This step-by-step walkthrough uses **colorful admonitions** to distinguish const
 
    <style>
      /* Customize admonition headers */
-     .admonition.note .admonition-title { background-color: #4A90E2; color: white; }
-     .admonition.tip .admonition-title  { background-color: #7ED321; color: white; }
+     .admonition.note .admonition-title { background-color:rgb(157, 194, 236); color: white; }
+     .admonition.tip .admonition-title  { background-color:rgb(204, 238, 169); color: white; }
      .admonition.important .admonition-title { background-color: #F5A623; color: white; }
-     .admonition.warning .admonition-title { background-color: #D0021B; color: white; }
+     .admonition.warning .admonition-title { background-color:rgb(234, 162, 170); color: white; }
    </style>
 
 1. Create & Configure Your `.yml` File
