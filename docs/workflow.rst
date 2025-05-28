@@ -46,8 +46,7 @@ This step-by-step walkthrough uses **colorful admonitions** to distinguish const
 
       .. code-block:: yaml
 
-         digitized_plot: /oak/.../datasets/scan_lines/Gambia/Gambia_scan_lines.csv
-
+         digitized_plot: /oak/stanford/groups/smhsiang/aerialhist/datasets/scan_lines/Gambia/Gambia_scan_lines.csv
 
 2. Initialize Stage
 ===================
@@ -116,7 +115,6 @@ This step-by-step walkthrough uses **colorful admonitions** to distinguish const
 
       sbatch inspectcrop_gambia_53.slurm
 
-
 4. Featurization
 ================
 
@@ -137,7 +135,6 @@ This step-by-step walkthrough uses **colorful admonitions** to distinguish const
 
    sbatch featurize_gambia_53.slurm
 
-
 5. Swath Breaks
 ===============
 
@@ -155,7 +152,6 @@ This step-by-step walkthrough uses **colorful admonitions** to distinguish const
 .. code-block:: bash
 
    sbatch swathbreak_gambia_53.slurm
-
 
 6. Sortie Plots
 ===============
@@ -176,7 +172,6 @@ This step-by-step walkthrough uses **colorful admonitions** to distinguish const
 
    sbatch plots_gambia_53.slurm
 
-
 7. New Neighbors
 ================
 
@@ -192,14 +187,105 @@ This step-by-step walkthrough uses **colorful admonitions** to distinguish const
 
    sbatch newneighbors_gambia_53.slurm
 
+8. Initialize Graph
+===================
 
---------------------------
-**General SLURM Tips**
---------------------------
+Use collected links to build mosaic components. A lightweight stage suitable for `dev` partition.
 
-- **Keep constant**: module loads, Singularity container commands.  
-- **Always edit**:
-  - `--config` path  
-  - `--stage` name  
-  - Stage-specific flags (e.g. `--ids`)  
-  - `#SBATCH` CPUs or partition 
+.. admonition:: What to edit
+   :class: tip
+
+   - **Stage:** `--stage initialize-graph`  
+   - **Partition:** `#SBATCH -p dev`  
+   - **CPUs:** `#SBATCH -c 1`
+
+.. code-block:: bash
+
+   sbatch initgraph_gambia_53.slurm
+
+9. Optimize Links
+=================
+
+Collect and cache link data for optimization. Specify target cluster IDs.
+
+.. admonition:: What to edit
+   :class: tip
+
+   - **Stage:** `--stage optimize-links`  
+   - **IDs:** `--ids 0` (or `--top 1`)  
+   - **Partition:** `#SBATCH -p dev`  
+   - **CPUs:** `#SBATCH -c 1`
+
+.. code-block:: bash
+
+   sbatch optlinks_gambia_53.slurm
+
+10. Ceres-Opt
+============
+
+Perform joint optimization using Ceres Solver.
+
+.. admonition:: What to edit
+   :class: tip
+
+   - **Stage:** `--stage ceres-opt`  
+   - **IDs:** `--ids 0`  
+   - **Partition:** `#SBATCH -p serc,normal`  
+   - **CPUs:** `#SBATCH -c 30`
+
+.. code-block:: bash
+
+   sbatch ceresopt_gambia_53.slurm
+
+11. Generate GeoTIFF
+====================
+
+Create mosaic raster for inspection. Adjust output GSD for resolution.
+
+.. admonition:: What to edit
+   :class: tip
+
+   - **Stage:** `--stage generate-geotiff`  
+   - **Output GSD:** `--output_gsd 1` (meters per pixel)  
+   - **Partition:** `#SBATCH -p serc,normal`  
+   - **CPUs:** `#SBATCH -c 30`
+
+.. code-block:: bash
+
+   sbatch geotiff_gambia_53.slurm
+
+12. Constrained Optimization
+============================
+
+Use GCP file for final georeferencing.
+
+.. admonition:: What to edit
+   :class: tip
+
+   - **GCP file:** ensure `gcp_file:` in config points to correct cloud path  
+   - **Stage:** `--stage constrained-opt`  
+   - **Partition:** `#SBATCH -p serc,normal`  
+   - **CPUs:** `#SBATCH -c 30`
+
+.. code-block:: bash
+
+   sbatch constropt_gambia_53.slurm
+
+13. Jupyter Notebook Inspection
+==============================
+
+Open the inspection notebook in Jupyter to visualize `img_df.geojson` and mosaic geometry.
+
+14. Final Task: High-Res Mosaic
+===============================
+
+To produce the high-resolution raster for upload, rerun the Generate GeoTIFF stage with `--output_gsd 1`.
+
+.. admonition:: Important
+   :class: important
+
+   Lower GSD values yield higher resolution but larger file sizes.
+
+.. code-block:: bash
+
+   sbatch geotiff_highres_gambia_53.slurm
