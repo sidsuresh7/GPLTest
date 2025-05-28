@@ -235,13 +235,10 @@ Open your notebook and plot the 1 m raster:
 
 .. code-block:: python
 
-   import rasterio
-   import matplotlib.pyplot as plt
-
-   with rasterio.open('/oak/.../results/Gambia/gambia_53/mosaic_1m.tif') as src:
-       fig, ax = plt.subplots()
-       ax.imshow(src.read(1))
-       ax.set_title('Gambia Mosaic @ 1 m/pixel')
-       plt.show()
+   cluster_df = img_df[img_df['cluster_id'] == 0]
+   
+   fig = plt.figure()
+   ax  = plt.gca()
+   cluster_df.plot(ax = ax)
 
        
