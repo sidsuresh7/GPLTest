@@ -243,3 +243,5 @@ Open your notebook and plot the 1 m raster:
        ax.imshow(src.read(1))
        ax.set_title('Gambia Mosaic @ 1 m/pixel')
        plt.show()
+
+       
