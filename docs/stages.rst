@@ -1,213 +1,281 @@
 .. contents::
-   :local:
-   :depth: 2
+\:local:
+\:depth: 2
 
-=============================
+\=============================
 User Step By Step Guide
-=============================
+=======================
 
 1. Inspect the Dataset Spreadsheet
-----------------------------------
-- Open the “DataSet” spreadsheet.
-- Understand that each row represents one ground survey (a plot of land the British government surveyed).
-- Note that the “Sorted plots” tab shows maps with the plane’s flight trajectory overlaid on each plot.
+
+---
+
+* Open the “DataSet” spreadsheet.
+* Understand that each row represents one ground survey (a plot of land the British government surveyed).
+* Note that the “Sorted plots” tab shows maps with the plane’s flight trajectory overlaid on each plot.
 
 2. Create a Configuration File
-------------------------------
+
+---
+
 A configuration (YAML) file tells the pipeline:
-- Where to find the raw images.
-- Where to save intermediate caches and final outputs.
+
+* Where to find the raw images.
+* Where to save intermediate caches and final outputs.
 
 2.1 Example Paths
 
 .. code-block:: yaml
 
-   # Path to store downloaded/cached image features
-   img_cache_folder: /scratch/groups/smhsiang/ahp/stitching/cache/Zambia/c82e/SURF
+# Path to store downloaded/cached image features
 
-   # Path to store intermediate checkpoints
-   checkpoint_cache_folder: /oak/stanford/groups/smhsiang/aerialhist/stitching/results/Zambia/c82e
+img\_cache\_folder: /scratch/groups/smhsiang/ahp/stitching/cache/Zambia/c82e/SURF
 
-   # Path to write the final stitched raster output
-   raster_output_folder: /oak/stanford/groups/smhsiang/aerialhist/stitching/results/Zambia/c82e
+# Path to store intermediate checkpoints
+
+checkpoint\_cache\_folder: /oak/stanford/groups/smhsiang/aerialhist/stitching/results/Zambia/c82e
+
+# Path to write the final stitched raster output
+
+raster\_output\_folder: /oak/stanford/groups/smhsiang/aerialhist/stitching/results/Zambia/c82e
 
 2.2 Create Your New Config
 
 .. code-block:: bash
 
-   find ~+ -type d -name "NCAP_DOS_53_GA*" | sort
-   cp gambia_124.yml gambia_53.yml
+find \~+ -type d -name "NCAP\_DOS\_53\_GA\*" | sort
+cp gambia\_124.yml gambia\_53.yml
 
-- Edit **gambia_53.yml**:
-  - Update `img_cache_folder` to your cache path for Gambia/gambia_53.
-  - Update `checkpoint_cache_folder` and `raster_output_folder` similarly.
+* Edit **gambia\_53.yml**:
 
-3. Run the Initialize Stage
-----------------------------
-The initialize stage scans folders, extracts SURF features, and builds `img_df.geojson`.
+  * Update `img_cache_folder` to your cache path for Gambia/gambia\_53.
+  * Update `checkpoint_cache_folder` and `raster_output_folder` similarly.
 
-3.1 Prepare a SLURM Script
+3. Sorted Plots Stage
 
-.. code-block:: bash
+---
 
-   cp slurm_initialize_example.sh my_initialize.sh
+This stage copies downloaded DOS plots into the pipeline and updates the config.
 
-- Edit **my_initialize.sh** to include:
-
-  .. code-block:: bash
-
-     singularity run /oak/stanford/groups/smhsiang/aerialhist/stitching/containers/surf_ceres.sif \
-         python3 /home/users/sidsur/aerial-history-stitching/main.py \
-         --config /oak/stanford/groups/smhsiang/aerialhist/stitching/config/Gambia/gambia_53.yml \
-         --stage initialize
-
-- Submit the job:
-
-  .. code-block:: bash
-
-     sbatch my_initialize.sh
-
-4. Inspect Results in Jupyter
------------------------------
-Once the job completes, check your outputs in a notebook:
-
-.. code-block:: python
-
-   import os
-   import geopandas as gpd
-
-   # Path to the configuration’s output folder
-   cache_dir = '/oak/stanford/groups/smhsiang/aerialhist/stitching/results/Gambia/gambia_53'
-
-   # Full path to the geojson cache file
-   cache_file = os.path.join(cache_dir, 'img_df.geojson')
-
-   # Read the geojson into a GeoDataFrame
-   img_df = gpd.read_file(cache_file)
-
-   # Display the GeoDataFrame
-   img_df
-
-5. Expected Output
-------------------
-- A file named **img_df.geojson** in your `results/Gambia/gambia_53` folder.
-- It should contain one row per image, with geometry for each camera location.
-
-6. Crop Stage
--------------
-This stage computes per–image cropping masks and (optionally) generates inspection files.
-
-6.1 Adjust Cropping Parameters (Optional)
-
-Modify these values in your YAML config if you need different margins:
+3.1 Update YAML Config
 
 .. code-block:: yaml
 
-   # Example cropping margins (values in pixels)
-   margin_bottom: 50
-   margin_left:   50
-   margin_top:    50
-   margin_right:  50
+# Add at the bottom of your existing config file:
 
-6.2 Run the Crop Stage
+digitized\_plot: /oak/stanford/groups/smhsiang/aerialhist/datasets/scan\_lines/Gambia/Gambia\_scan\_lines.csv
+
+3.2 Prepare SLURM Script
 
 .. code-block:: bash
 
-   cp slurm_initialize.sh slurm_crop.sh
+cp slurm\_initialize\_example.sh slurm\_sorted\_plots.sh
 
-- Edit **slurm_crop.sh**:
-  - Add a CPU-allocation directive:
+* In **slurm\_sorted\_plots.sh**:
 
-    .. code-block:: text
+  * Change the stage flag: `--stage initialize-from-plots`
+  * Change partition: `#SBATCH -p dev`
+  * Remove any `#SBATCH -c` or CPU directives (defaults to 1 CPU).
 
-       #SBATCH -c 30
-
-  - Replace the stage command with:
-
-    .. code-block:: bash
-
-       singularity run /oak/stanford/groups/smhsiang/aerialhist/stitching/containers/surf_ceres.sif \
-           python3 /home/users/sidsur/aerial-history-stitching/main.py \
-           --config /oak/stanford/groups/smhsiang/aerialhist/stitching/config/Gambia/gambia_53.yml \
-           --stage crop
-
-- Submit the job:
-
-  .. code-block:: bash
-
-     sbatch slurm_crop.sh
-
-**Output:** Updates `img_df.geojson`, adding a new `cropping_mask` column for every image.
-
-6.3 Inspect Cropping Masks (Test Run)
--------------------------------------
-Before running the full crop, generate inspection files for a small subset:
+3.3 Submit the Job
 
 .. code-block:: bash
 
-   singularity run /oak/stanford/groups/smhsiang/aerialhist/stitching/containers/surf_ceres.sif \
-       python3 /home/users/sidsur/aerial-history-stitching/main.py \
-       --config /oak/stanford/groups/smhsiang/aerialhist/stitching/config/Gambia/gambia_53.yml \
-       --stage crop \
-       --test-crop
+sbatch slurm\_sorted\_plots.sh
 
-- Submit the test job:
+* After completion, confirm that `.err` and `.out` files are empty.
 
-  .. code-block:: bash
+4. New Neighbors Stage
 
-     sbatch slurm_crop.sh
+---
 
-Inspection files appear in:
+This stage calculates links within clusters.
 
-.. code-block:: text
-
-   /oak/stanford/groups/smhsiang/aerialhist/stitching/results/Gambia/gambia_53/cropping_inspection/
-
-They contain sample masks for margin verification and do not modify `img_df.geojson`.
-
-7. Featurization Stage
-----------------------
-This stage extracts SURF features from each image and writes them to HDF5 files.
-
-7.1 Copy Your SLURM Script
+4.1 Prepare SLURM Script
 
 .. code-block:: bash
 
-   cp slurm_crop.sh slurm_featurize.sh
+cp slurm\_crop.sh slurm\_new\_neighbors.sh
 
-7.2 Edit the Script for Featurization
+* In **slurm\_new\_neighbors.sh**:
 
-- In **slurm_featurize.sh**, keep any SBATCH directives and replace the command with:
+  * Change stage and IDs: `--stage new-neighbors --ids -2`
+  * Set partition and CPU count:
+    `#SBATCH -p serc,normal`
+    `#SBATCH -c 30`
 
-  .. code-block:: bash
-
-     singularity run /oak/stanford/groups/smhsiang/aerialhist/stitching/containers/surf_ceres.sif \
-         python3 /home/users/sidsur/aerial-history-stitching/main.py \
-         --config /oak/stanford/groups/smhsiang/aerialhist/stitching/config/Gambia/gambia_53.yml \
-         --stage featurize
-
-7.3 Submit the Job
+4.2 Submit the Job
 
 .. code-block:: bash
 
-   sbatch slurm_featurize.sh
+sbatch slurm\_new\_neighbors.sh
 
-**Output:** In your `img_cache_folder`, you will find one `.hdf5` file per image containing extracted SURF descriptors.
+5. Initialize Graph Stage
 
-8. Swath-Breaks Stage
----------------------
-This stage links images into flight “swaths” and updates your image catalog.
+---
 
-8.1 Copy Your SLURM Script
+Reconstruct the mosaic components using collected links.
+
+5.1 Prepare SLURM Script
 
 .. code-block:: bash
 
-   cp slurm_crop.sh slurm_swath_breaks.sh
+cp slurm\_crop.sh slurm\_init\_graph.sh
 
-8.2 Edit for Swath-Breaks
+* In **slurm\_init\_graph.sh**:
 
-- In **slurm_swath_breaks.sh**, replace the pipeline command with:
+  * Change partition: `#SBATCH -p dev`
+  * Set CPU count to 1 (`#SBATCH -c 1`)
+  * Stage flag: `--stage initialize-graph`
 
-  .. code-block:: bash
+5.2 Submit the Job
 
-     singularity run /oak/stanford/groups
+.. code-block:: bash
+
+sbatch slurm\_init\_graph.sh
+
+* **Output**:
+
+  * `img_df.geojson` updated with `cluster_id`, `global_trans`, and `geometry`.
+  * Logs show cluster sizes.
+  * Note: axes may flip compared to Jupyter plots.
+
+6. Optimize Links Stage
+
+---
+
+Precompute link sets and save for optimization.
+
+6.1 Prepare SLURM Script
+
+.. code-block:: bash
+
+cp slurm\_init\_graph.sh slurm\_optimize\_links.sh
+
+* In **slurm\_optimize\_links.sh**:
+
+  * Change stage and IDs: `--stage optimize-links --ids 0`
+  * Partition: `#SBATCH -p dev`
+  * CPU count to 1 (`#SBATCH -c 1`)
+
+6.2 Submit the Job
+
+.. code-block:: bash
+
+sbatch slurm\_optimize\_links.sh
+
+* Creates a file listing links for cluster 0.
+
+7. Ceres-Opt Stage
+
+---
+
+Jointly optimize positions via Ceres Solver.
+
+7.1 Prepare SLURM Script
+
+.. code-block:: bash
+
+cp slurm\_optimize\_links.sh slurm\_ceres\_opt.sh
+
+* In **slurm\_ceres\_opt.sh**:
+
+  * Stage flag: `--stage ceres-opt`
+  * Partition: `#SBATCH -p serc,normal`
+  * CPU count: `#SBATCH -c 30`
+  * IDs: `--ids 0`
+
+7.2 Submit the Job
+
+.. code-block:: bash
+
+sbatch slurm\_ceres\_opt.sh
+
+8. Generate GeoTIFF Stage
+
+---
+
+Create a quick mosaic for inspection.
+
+8.1 Prepare SLURM Script
+
+.. code-block:: bash
+
+cp slurm\_ceres\_opt.sh slurm\_generate\_tiff.sh
+
+* In **slurm\_generate\_tiff.sh**:
+
+  * Stage flag: `--stage generate-geotiff`
+  * Set output GSD in YAML or via `--output-gsd 1`
+  * Partition: `#SBATCH -p serc,normal`
+  * CPU count: `#SBATCH -c 30`
+
+8.2 Submit the Job
+
+.. code-block:: bash
+
+sbatch slurm\_generate\_tiff.sh
+
+* **Output**: a mosaic in GeoTIFF form. Use `output-gsd: 1` for 1m resolution.
+
+9. Constrained Optimization Stage
+
+---
+
+Refine mosaic using Ground Control Points (GCPs).
+
+9.1 Update Config
+
+.. code-block:: yaml
+
+# At the bottom of your config:
+
+gcp\_file: /path/to/your/Gambia\_GCP\_points.csv
+
+9.2 Prepare SLURM Script
+
+.. code-block:: bash
+
+cp slurm\_generate\_tiff.sh slurm\_constrained\_opt.sh
+
+* In **slurm\_constrained\_opt.sh**:
+
+  * Stage flag: `--stage constrained-opt`
+  * Partition & CPU: `#SBATCH -p serc,normal`, `#SBATCH -c 30`
+
+9.3 Submit the Job
+
+.. code-block:: bash
+
+sbatch slurm\_constrained\_opt.sh
+
+10. Jupyter Notebook Inspection
+
+---
+
+Open your notebook and plot the updated geometry:
+
+.. code-block:: python
+
+import geopandas as gpd
+import matplotlib.pyplot as plt
+
+img\_df = gpd.read\_file('/oak/stanford/groups/smhsiang/aerialhist/stitching/results/Gambia/gambia\_53/img\_df.geojson')
+img\_df.plot()
+plt.show()
+
+11. Task: Create High-Resolution Raster
+
+---
+
+Use the latest mosaic and generate a 1m-resolution GeoTIFF for upload.
+
+.. code-block:: bash
+
+# Ensure your config has:
+
+output\_gsd: 1
+
+sbatch slurm\_generate\_tiff.sh
+
+* **Note**: Higher resolution increases storage; 1m per pixel gives fine detail.
